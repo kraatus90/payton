@@ -1,4 +1,4 @@
-source "drivers/video/fbdev/slimport/anx7816/Kconfig
+source "drivers/video/fbdev/slimport/anx7816/Kconfig"
 
 config SLIMPORT_COMMON
 	tristate "Analogix Slimport transmitter ANX support"
