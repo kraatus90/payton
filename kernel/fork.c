@@ -716,7 +716,6 @@ static inline void __mmput(struct mm_struct *mm)
  */
 int mmput(struct mm_struct *mm)
 {
-	int mm_freed = 0;
 	might_sleep();
 
 	if (atomic_dec_and_test(&mm->mm_users))
