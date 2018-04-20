@@ -64,26 +64,6 @@
 uint8_t ice_key[ICE_KEY_SIZE];
 uint8_t ice_salt[ICE_KEY_SIZE];
 
-static void qti_pfk_ice_stat_failure(char *type, uint32_t id, int32_t err)
-{
-	static uint32_t set_key_failure, invalidate_key_failure;
-
-	if (id == TZ_ES_SET_ICE_KEY_ID)
-		set_key_failure++;
-	else if (id == TZ_ES_INVALIDATE_ICE_KEY_ID)
-		invalidate_key_failure++;
-	else {
-		pr_warn("%s: unsupported id %d\n", __func__, id);
-		return;
-	}
-
-	pr_warn("%s: failed to call scm %d (%d %d)\n",
-		__func__, id, set_key_failure, invalidate_key_failure);
-	if (err != -EBUSY || !strncmp(type, "sdcc", 4))
-		BUG();
-	BUG_ON((invalidate_key_failure + set_key_failure) > 10);
-}
-
 int qti_pfk_ice_set_key(uint32_t index, uint8_t *key, uint8_t *salt,
 			char *storage_type)
 {
@@ -91,7 +71,6 @@ int qti_pfk_ice_set_key(uint32_t index, uint8_t *key, uint8_t *salt,
 	int ret;
 	char *tzbuf_key = (char *)ice_key;
 	char *tzbuf_salt = (char *)ice_salt;
-	char *s_type = storage_type;
 
 	uint32_t smc_id = 0;
 	u32 tzbuflen_key = sizeof(ice_key);
@@ -128,32 +107,27 @@ int qti_pfk_ice_set_key(uint32_t index, uint8_t *key, uint8_t *salt,
 	desc.args[3] = virt_to_phys(tzbuf_salt);
 	desc.args[4] = tzbuflen_salt;
 
-	ret = qcom_ice_setup_ice_hw((const char *)s_type, true);
+	ret = qcom_ice_setup_ice_hw((const char *)storage_type, true);
 
 	if (ret) {
 		pr_err("%s: could not enable clocks: 0x%x\n", __func__, ret);
-		goto out;
+		return ret;
 	}
 
 	ret = scm_call2(smc_id, &desc);
 
-	pr_debug(" %s , ret = %d\n", __func__, ret);
+	ret = qcom_ice_setup_ice_hw((const char *)storage_type, false);
 
+	pr_debug(" %s , ret = %d\n", __func__, ret);
 	if (ret) {
 		pr_err("%s: Error: 0x%x\n", __func__, ret);
-		qti_pfk_ice_stat_failure(s_type, smc_id, ret);
-		if (ret == -EBUSY) {
-			goto out;
-		} else {
-			smc_id = TZ_ES_INVALIDATE_ICE_KEY_ID;
-			desc.arginfo = TZ_ES_INVALIDATE_ICE_KEY_PARAM_ID;
-			desc.args[0] = index;
-			scm_call2(smc_id, &desc);
-		}
+
+		smc_id = TZ_ES_INVALIDATE_ICE_KEY_ID;
+		desc.arginfo = TZ_ES_INVALIDATE_ICE_KEY_PARAM_ID;
+		desc.args[0] = index;
+		scm_call2(smc_id, &desc);
 	}
 
-	ret = qcom_ice_setup_ice_hw((const char *)s_type, false);
-out:
 	return ret;
 }
 
@@ -186,14 +160,11 @@ int qti_pfk_ice_invalidate_key(uint32_t index, char *storage_type)
 
 	ret = scm_call2(smc_id, &desc);
 
+	ret = qcom_ice_setup_ice_hw((const char *)storage_type, false);
+
 	pr_debug(" %s , ret = %d\n", __func__, ret);
-	if (ret) {
+	if (ret)
 		pr_err("%s: Error: 0x%x\n", __func__, ret);
-		qti_pfk_ice_stat_failure(storage_type, smc_id, ret);
-		qcom_ice_setup_ice_hw((const char *)storage_type, false);
-	} else {
-		ret = qcom_ice_setup_ice_hw((const char *)storage_type, false);
-	}
 
 	return ret;
 
