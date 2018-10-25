@@ -109,6 +109,7 @@ x509.genkey
 
 # Kconfig presets
 all.config
+build.sh
 
 # Kdevelop4
 *.kdev4
